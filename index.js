@@ -43,19 +43,17 @@ async function changeZipCode(page) {
 	console.log(">> Waiting for continue element");
 	// Wait for close button and click it
 	await page.waitFor(1500);
-	await page.evaluate(() => {
-		document.querySelector("#GLUXConfirmClose").click();
-	});
+	// Close popup and wait for page to load
+	await Promise.all([
+		page.evaluate(() => {
+			document.querySelector("#GLUXConfirmClose").click();
+		}),
+		page.waitForNavigation(),
+	]);
 	console.log(">> Closed zip code pop up");
 }
 
-async function run(url) {
-	const browser = await puppeteer.launch({
-		// For dev purposes - also works headless
-		headless: false,
-		defaultViewport: null,
-		args: ["--start-maximized"],
-	});
+async function run(browser, url) {
 	const page = await browser.newPage();
 	// Wait until page loaded
 	await page.goto(url, { waitUntil: "networkidle2" });
@@ -63,25 +61,24 @@ async function run(url) {
 	console.log(">> Clicking change zip code nav link");
 	await changeZipCode(page);
 
-	// Wait for page to reload with new zip code (and until "add to cart" button exists)
-	await page.waitFor(2000);
+	// Make sure "add to cart" button exists
 	await page.waitForSelector("#add-to-cart-button");
 	console.log(">> Adding to cart");
 
-	await page.click("input#add-to-cart-button");
-	// Wait until page after "add to cart" is clicked
+	// Add to cart and wait for page to reload
+	await Promise.all([page.click("input#add-to-cart-button"), page.waitForNavigation()]);
+	// Make sure cart element link is visible
 	await page.waitForSelector("#huc-v2-order-row-with-divider"); // this is the "added to cart alert"
 
-	// Go to cart
-	await page.click("#nav-cart");
-	console.log(">> Waiting for quantity selector");
-	// Wait for and select quantity picker button
-	await page.waitFor('select[name="quantity"]');
-	await page.waitFor(1500);
+	// Navigate to cart and wait for page load
+	await Promise.all([page.click("#nav-cart"), page.waitForNavigation()]);
+
+	console.log(">> Selecting the quantity selector");
 	await page.click('select[name="quantity"]');
-	console.log(">> Waiting for dropdown to open up");
+	console.log(">> Waiting for dropdown to show up");
 	// Wait and select the 10+ option
 	await page.waitFor("#dropdown1_10");
+	console.log(">> Selecting the 10+ option");
 	await page.click("#dropdown1_10");
 
 	// Enter "999" as the new quantity
@@ -103,9 +100,6 @@ async function run(url) {
 
 	// Get the new quantity from the value of the input
 	let value = await page.$eval('input[name="quantityBox"]', el => el.getAttribute("value"));
-
-	// Close the browser and return the value
-	browser.close();
 	return value;
 }
 
@@ -116,7 +110,20 @@ async function main() {
 	} else {
 		url = stripURL(url);
 	}
-	return await run(url);
+	const browser = await puppeteer.launch({
+		// For dev purposes - also works headless
+		headless: false,
+		defaultViewport: null,
+		args: ["--start-maximized"],
+	});
+	// Close the browser whatever happens
+	try {
+		return await run(browser, url);
+	} catch (e) {
+		throw e;
+	} finally {
+		browser.close();
+	}
 }
 
 main()
