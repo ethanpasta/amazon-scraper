@@ -1,5 +1,5 @@
 {
-  "name": "similarweb",
+  "name": "amazon scraper",
   "version": "1.0.0",
   "description": "Amazon crawler - take home project",
   "main": "index.js",
